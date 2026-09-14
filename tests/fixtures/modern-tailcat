@@ -1,0 +1,5 @@
+#!/bin/sh
+if [ "${1:-}" = serve ] && [ "${2:-}" = --help ]; then
+  exit 0
+fi
+exit 1
