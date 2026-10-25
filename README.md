@@ -10,6 +10,27 @@ cd ~/git/tailcat-one-shot && bash serve.sh
 
 **请把连接地址当作密码。** 默认使用 `no-auth-ssh`，知道地址的人就能获得运行服务的用户 Shell。不要把地址、密钥文件或日志提交到 Git，也不要公开到 DNS、网页或聊天群。[Tailcat 官方安全说明](https://github.com/tailscale/tailcat#auth-free-ssh-server)。
 
+## Windows 原生：开机后自动运行（无需 WSL）
+
+在项目目录中，以**管理员身份打开 Windows PowerShell 5.1**，运行：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\serve.ps1
+```
+
+默认动作是安装并立即启动 `TailcatOneShot` Windows 服务，启动类型设为 `Automatic`，以后开机时自动启动，无需登录。脚本下载并校验固定的 Tailcat v0.7.0 Windows amd64/arm64 发布包，用 Windows 自带的 .NET Framework 编译器构建服务宿主；无需 Bash、WSL、Go 或额外服务管理工具。Tailcat 退出后五秒重试，宿主崩溃由 Windows 服务恢复机制重启。重复运行会复用现有服务和密钥，不会重启正在运行的服务。
+
+服务使用低权限的 `NT AUTHORITY\LocalService` 账户，远程 Shell 也属于这个账户，**不是当前桌面用户或管理员**。原生服务拥有独立的 `default` 密钥，不复用 WSL 或桌面用户的密钥。程序安装在 `%ProgramFiles%\TailcatOneShot`，日志、连接地址和密钥分别位于其 `state\server.log`、`state\address` 和 `state\config\tailcat\keys\default.private.json`。目录仅允许管理员、SYSTEM 和 LocalService 访问；LocalService 只能修改 `state`。查看地址也需要管理员 PowerShell。
+
+```powershell
+.\serve.ps1 status   # 服务状态、启动类型和连接地址
+.\serve.ps1 address  # 只打印连接地址
+.\serve.ps1 stop     # 停止服务并禁用开机启动，保留密钥
+.\serve.ps1          # 再次启动并恢复开机自动启动
+```
+
+停止服务会终止 Tailcat 及其 SSH 子进程。睡眠、关机或网络断开时仍无法连接。若 PowerShell 的脚本策略阻止直接运行，可像首次安装一样使用 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\serve.ps1 status`。
+
 ## macOS：登录后自动运行
 
 脚本创建用户 LaunchAgent，并通过 `caffeinate -is` 启动 Tailcat。`launchd` 会在进程退出后重新拉起它；`caffeinate -s` 只在接电时有效。锁屏本身不影响连接；用户注销、关机、网络中断或 Mac 实际睡眠时，远程连接不可用。合盖能否保持唤醒还取决于 Mac 的外接显示器、电源及系统设置。[Apple 的 launchd 文档](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html)。
@@ -48,3 +69,11 @@ bash tests/test.sh
 ```
 
 测试覆盖 Bash 语法、旧/新 Tailcat 参数、LaunchAgent plist 渲染、Linux systemd unit 渲染。WSL 计划任务需要在 Windows 上进行最终实机验证；仅在 macOS 上无法验证它是否已被 Windows 任务计划程序接受。
+
+Windows 原生检查（无需管理员，不修改真实服务）：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\windows-test.ps1
+```
+
+检查实际编译与运行的服务宿主、日志地址解析、进程重启、密钥复用和崩溃时子进程清理，并模拟验证服务归属、自动启动及停止操作。实际 SCM 服务注册、LocalService 下的 Tailcat SSH 连接和重启 Windows 后自动启动仍需管理员实机验证。
